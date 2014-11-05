@@ -227,18 +227,16 @@ class PicasaClient():
                 newDimension = (newWidth, self.PICASA_MAX_FREE_DIMENSION)
 
             # Create a temporary resized file 
-            tempFile = None
-            tempFile = None
             if newDimension is not None:
                 print "Resizing %s (%s, %s) to (%s, %s)" % (filename, width, height, newDimension[0], newDimension[1])
                 resizedImage = img.resize(newDimension) 
                 tempFile, tempPath = mkstemp()
                 resizedImage.save(tempPath, "JPEG")
-            self.uploadPhoto(tempPath, filename, md5, album)
-
-            if tempFile is not None:
+                self.uploadPhoto(tempPath, filename, md5, album)
                 os.close(tempFile)
                 os.remove(tempPath)
+            else:
+                self.uploadPhoto(file, filename, md5, album)
         except Exception as e:
             print "Unable to open file %s" % filename
             import traceback; traceback.print_exc()
