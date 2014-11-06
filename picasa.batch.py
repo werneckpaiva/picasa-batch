@@ -229,9 +229,11 @@ class PicasaClient():
             # Create a temporary resized file 
             if newDimension is not None:
                 print "Resizing %s (%s, %s) to (%s, %s)" % (filename, width, height, newDimension[0], newDimension[1])
+
                 resizedImage = img.resize(newDimension) 
                 tempFile, tempPath = mkstemp()
-                resizedImage.save(tempPath, "JPEG")
+
+                resizedImage.save(tempPath, "JPEG", exif=img.info['exif'])
                 self.uploadPhoto(tempPath, filename, md5, album)
                 os.close(tempFile)
                 os.remove(tempPath)
