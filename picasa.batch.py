@@ -33,16 +33,11 @@ class PicasaClient():
 
     albuns=None
 
-    TOKEN_EXTRACT_URL = 'http://www.werneckpaiva.com/tools/picasa/token.php';
-    PICASA_SCOPE = 'http://picasaweb.google.com/data/'
-    PICASA_MAX_FREE_DIMENSION = 2048
+    PICASA_MAX_FREE_DIMENSION = 4900
 
     #pattern = re.compile('\.(jpg|avi)$', re.IGNORECASE)
     pattern = re.compile('\.jpg$', re.IGNORECASE)
     patternWrong = re.compile('^\.', re.IGNORECASE)
-
-    def __init__(self):
-        pass
 
     def connect(self):
         self.gdClient = gdata.photos.service.PhotosService()
