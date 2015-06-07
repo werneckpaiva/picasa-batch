@@ -18,6 +18,7 @@ from oauth2client.tools import run_flow
 import atom
 
 import gdata.photos.service, gdata.media, gdata.geo, gdata.gauth
+import httplib2
 
 
 class PicasaClient():
