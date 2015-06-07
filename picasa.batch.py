@@ -357,7 +357,7 @@ def main():
     parser.add_argument('-a', dest='normalizeAlbum', help='Normalize album name', action='store_true')
     parser.add_argument('-u', dest='upload', help='Upload album', action='store_true')
     parser.add_argument('-c', dest="forceCreateAlbum", help='Enforce create album', action='store_true')
-    parser.add_argument('-r', dest="forceResizePhoto", help='Resize picture bigger than 2048 before upload (don\'t modify the original file)', action='store_true')
+    parser.add_argument('-r', dest="forceResizePhoto", help='Resize picture bigger than 4900px before upload (don\'t modify the original file)', action='store_true')
     parser.add_argument('--perms', dest='perm', action='store', help='Album perms', choices=['public', 'private', 'link'], default='private')
     args = parser.parse_args()
     client = PicasaClient();
