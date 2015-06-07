@@ -12,16 +12,22 @@ from tempfile import mkstemp
 
 import argparse
 
-import oauth
-import gdata.photos.service, gdata.media, gdata.geo, gdata.gauth
+from oauth2client.file import Storage
+from oauth2client.client import OAuth2WebServerFlow
+from oauth2client.tools import run_flow
 import atom
+
+import gdata.photos.service, gdata.media, gdata.geo, gdata.gauth
+
 
 class PicasaClient():
 
+    api_key = None
+    api_secret = None
+    token = None
+
     gdClient = None
 
-    userid=None
-    password=None
     rootpath=None
 
     verbose=False
@@ -39,12 +45,66 @@ class PicasaClient():
     pattern = re.compile('\.jpg$', re.IGNORECASE)
     patternWrong = re.compile('^\.', re.IGNORECASE)
 
+    def load_stored_credentials(self):
+        storage = Storage("credentials")
+        value = storage.get()
+        if not value:
+            raise Exception("Invalid token")
+        self.credentials = value
+
+    def save_credentials(self):
+        storage = Storage("credentials.dat")
+        storage.put(self.credentials)
+
+    def _do_request(self, url, method="GET", body=None):
+        (resp_headers, content) = self.gdClient.request(url, method, body=body, headers={'GData-Version': '2'})
+        if resp_headers.status == 403:
+            print "refreshing credentials"
+            self.credentials.refresh(self.gdClient)
+            self.save_credentials()
+            return self._do_request(url)
+        elif resp_headers.status != 200:
+            print resp_headers.status, "%s - %s - <%s>" % (resp_headers.status, resp_headers.reason, url)
+            raise Exception(resp_headers.status, "%s - %s - <%s>" % (resp_headers.status, resp_headers.reason, url))
+        return content
+
     def connect(self):
-        self.gdClient = gdata.photos.service.PhotosService()
-        self.gdClient.email = self.userid
-        self.gdClient.password = self.password
-        self.gdClient.source = 'werneckpaiva-PicasaBatchUpload'
-        self.gdClient.ProgrammaticLogin()
+        flow = OAuth2WebServerFlow(client_id=self.api_key,
+                           client_secret=self.api_secret,
+                           scope='https://picasaweb.google.com/data/',
+                           redirect_uri='http://localhost/return',
+                           access_type='offline', approval_prompt='force')
+        if self.token:
+            self.credentials = flow.step2_exchange(self.token)
+            self.save_credentials()
+        else:
+            storage = Storage("credentials.dat")
+            credentials = storage.get()
+            if not credentials:
+                class MyOpts:
+                    pass
+                flags=MyOpts()
+                flags.logging_level = 'DEBUG'
+                flags.noauth_local_webserver = False
+                flags.auth_host_port = [8100]
+                flags.auth_host_name = 'localhost'
+                credentials = run_flow(flow, storage, flags=flags)
+            if credentials.access_token_expired:
+                credentials.refresh(httplib2.Http())
+            self.credentials = credentials
+        
+#         auth2token = gdata.gauth.OAuth2TokenFromCredentials(credentials)
+        self.gdClient = gdata.photos.service.PhotosService(additional_headers={'Authorization' : 'Bearer %s' % self.credentials.access_token})
+#         self.gdClient = auth2token.authorize(gdClient)
+
+        self.load_user_profile()
+
+
+    def load_user_profile(self):
+        print "Loading user profile"
+        result = self.gdClient.GetUserFeed()
+        self.userid = result.user.text
+        self.gdClient = gdata.photos.service.PhotosService(email=self.userid, additional_headers={'Authorization' : 'Bearer %s' % self.credentials.access_token})
 
     def batchUpload(self, paths):
         self.connect()
@@ -143,9 +203,9 @@ class PicasaClient():
            try:
                album = self.gdClient.InsertAlbum(albumName, albumName, access=self.perm, timestamp=albumDate)
                return album
-           except:
-              print "Create failed."
-              time.sleep(2)
+           except Exception as e:
+               print "Create failed."
+               time.sleep(2)
     
     def getAlbums(self):
         uri = '/data/feed/api/user/%s?kind=album' % (self.userid)
@@ -268,13 +328,14 @@ def md5sum(fileName):
 def readFromConfigFile(client, args):
     configParser = ConfigParser.ConfigParser()
     configParser.readfp(args.config)
-    client.userid = getParam(args.userid, configParser, 'userid');
-    client.password = getParam(args.password, configParser, 'password');
+    client.api_key = getParam(args.api_key, configParser, 'api_key');
+    client.api_secret = getParam(args.api_secret, configParser, 'api_secret');
     client.rootpath = getParam(args.rootpath, configParser, 'rootpath');
     client.perm = args.perm
     client.verbose = args.verbose
     client.forceCreateAlbum = args.forceCreateAlbum
     client.forceResizePhoto = args.forceResizePhoto
+    client.token = args.token
 
 
 def getParam(arg, parser, item):
@@ -287,8 +348,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', dest='verbose', help='Verbose', action='store_true')
     parser.add_argument('--config', dest='config', help='Configuration file', type=argparse.FileType('r'))
-    parser.add_argument('--user', dest='userid', help='User id')
-    parser.add_argument('--pass', dest='password', help='Password')
+    parser.add_argument('--apikey', dest='api_key', help='api key')
+    parser.add_argument('--apisecret', dest='api_secret', help='api secret')
+    parser.add_argument('--token', dest='token', help='Token returned')
     parser.add_argument('--root', dest='rootpath', help='Root Path')
     parser.add_argument('--folder', dest="folder", help='Upload folder(s)', nargs='+', action='store')
     parser.add_argument('-a', dest='normalizeAlbum', help='Normalize album name', action='store_true')
