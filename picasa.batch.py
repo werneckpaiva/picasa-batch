@@ -57,17 +57,8 @@ class PicasaClient():
         storage = Storage("credentials.dat")
         storage.put(self.credentials)
 
-    def _do_request(self, url, method="GET", body=None):
-        (resp_headers, content) = self.gdClient.request(url, method, body=body, headers={'GData-Version': '2'})
-        if resp_headers.status == 403:
-            print "refreshing credentials"
-            self.credentials.refresh(self.gdClient)
-            self.save_credentials()
-            return self._do_request(url)
-        elif resp_headers.status != 200:
-            print resp_headers.status, "%s - %s - <%s>" % (resp_headers.status, resp_headers.reason, url)
-            raise Exception(resp_headers.status, "%s - %s - <%s>" % (resp_headers.status, resp_headers.reason, url))
-        return content
+    def refresh_token(self):
+        self.credentials.refresh(httplib2.Http())
 
     def connect(self):
         flow = OAuth2WebServerFlow(client_id=self.api_key,
@@ -91,7 +82,7 @@ class PicasaClient():
                 flags.auth_host_name = 'localhost'
                 credentials = run_flow(flow, storage, flags=flags)
             if credentials.access_token_expired:
-                credentials.refresh(httplib2.Http())
+                self.refresh_token()
             self.credentials = credentials
         
 #         auth2token = gdata.gauth.OAuth2TokenFromCredentials(credentials)
@@ -266,6 +257,7 @@ class PicasaClient():
                uploaded=True
             except gdata.photos.service.GooglePhotosException as e:
                 print "Upload failed. ", e 
+                self.refresh_token()
                 time.sleep(2)
 
     def resizeAndUploadPhoto(self, file, filename, md5, album):
