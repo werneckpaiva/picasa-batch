@@ -59,6 +59,7 @@ class PicasaClient():
 
     def refresh_token(self):
         self.credentials.refresh(httplib2.Http())
+        self.save_credentials()
 
     def connect(self):
         flow = OAuth2WebServerFlow(client_id=self.api_key,
