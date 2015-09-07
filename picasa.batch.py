@@ -81,9 +81,9 @@ class PicasaClient():
                 flags.auth_host_port = [8100]
                 flags.auth_host_name = 'localhost'
                 credentials = run_flow(flow, storage, flags=flags)
+            self.credentials = credentials
             if credentials.access_token_expired:
                 self.refresh_token()
-            self.credentials = credentials
         
 #         auth2token = gdata.gauth.OAuth2TokenFromCredentials(credentials)
         self.gdClient = gdata.photos.service.PhotosService(additional_headers={'Authorization' : 'Bearer %s' % self.credentials.access_token})
@@ -212,6 +212,7 @@ class PicasaClient():
             # print 'Getting albums: %s' % (len(albums))
             if len(albumsBlock.entry)<=1 or offset >= total:
                break
+        print "%s albuns loaded." % len(albums)
         return albums
 
     def getAlbumDateFromPhotos(self, file):
@@ -304,6 +305,22 @@ class PicasaClient():
             self.gdClient.Put(album, album.GetEditLink().href, converter=gdata.photos.AlbumEntryFromString)
             print "normalize"
 
+    def deleteAll(self):
+        self.connect()
+        self.albuns = self.getAlbums()
+        delete_worker(self.gdClient, self.albuns)
+
+def delete_worker(gdClient, albuns):
+    print "Deleting %s albuns" % len(albuns)
+    for i, album in enumerate(albuns):
+            if album.GetEditLink():
+                print "Deleting %s - %s" % (i, album.title.text)
+                try:
+                    gdClient.Delete(album)
+                except Exception as e:
+                    print e
+#                     import traceback
+#                     traceback.print_stack()
 
 def md5sum(fileName):
     m = hashlib.md5()
@@ -345,6 +362,7 @@ def main():
     parser.add_argument('--apikey', dest='api_key', help='api key')
     parser.add_argument('--apisecret', dest='api_secret', help='api secret')
     parser.add_argument('--token', dest='token', help='Token returned')
+    parser.add_argument('--delete-all', dest='delete_all', help='Delete all albuns (be careful)', action='store_true')
     parser.add_argument('--root', dest='rootpath', help='Root Path')
     parser.add_argument('--folder', dest="folder", help='Upload folder(s)', nargs='+', action='store')
     parser.add_argument('-a', dest='normalizeAlbum', help='Normalize album name', action='store_true')
@@ -360,6 +378,8 @@ def main():
         pass
     elif args.upload==True:
         client.batchUpload(args.folder)
+    elif args.delete_all:
+        client.deleteAll()
     elif args.normalizeAlbum==True:
         client.normalizeAlbums()
 
