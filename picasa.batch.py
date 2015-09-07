@@ -260,7 +260,7 @@ class PicasaClient():
                uploaded=True
             except gdata.photos.service.GooglePhotosException as e:
                 print "Upload failed. ", e 
-                self.refresh_token()
+                self.connect()
                 time.sleep(2)
 
     def resizeAndUploadPhoto(self, file, filename, md5, album):
