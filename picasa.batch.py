@@ -206,10 +206,11 @@ class PicasaClient():
         offset = 1
         while True:
             albumsBlock=self.gdClient.GetFeed(uri, limit=limit, start_index=offset)
+            total = int(albumsBlock.total_results.text)
             offset = len(albums) + limit
             albums.extend(albumsBlock.entry)
             # print 'Getting albums: %s' % (len(albums))
-            if len(albumsBlock.entry)<=1:
+            if len(albumsBlock.entry)<=1 or offset >= total:
                break
         return albums
 
