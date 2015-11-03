@@ -40,7 +40,7 @@ class PicasaClient():
 
     albuns=None
 
-    PICASA_MAX_FREE_DIMENSION = 4900
+    PICASA_MAX_FREE_DIMENSION = 2048
 
     #pattern = re.compile('\.(jpg|avi)$', re.IGNORECASE)
     pattern = re.compile('\.jpg$', re.IGNORECASE)
