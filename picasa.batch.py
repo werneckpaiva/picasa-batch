@@ -284,7 +284,7 @@ class PicasaClient():
                 resizedImage = img.resize(newDimension) 
                 tempFile, tempPath = mkstemp()
 
-                resizedImage.save(tempPath, "JPEG", exif=img.info['exif'])
+                resizedImage.save(tempPath, "JPEG", exif=img.info.get('exif'))
                 self.uploadPhoto(tempPath, filename, md5, album)
                 os.close(tempFile)
                 os.remove(tempPath)
