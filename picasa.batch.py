@@ -3,7 +3,7 @@
 import sys
 import string, re, time
 from datetime import datetime
-from configparser import ConfigParser
+import configparser
 import os, signal
 import hashlib
 from PIL import Image
@@ -35,11 +35,12 @@ class PicasaClient():
 
     forceCreateAlbum=False
     forceResizePhoto=False
+    forceNotUploadFiles=False
 
     perm=None
 
     albuns=None
-    
+
     albunsToBeCreated = []
 
     PICASA_MAX_FREE_DIMENSION = 2048
@@ -87,7 +88,7 @@ class PicasaClient():
             self.credentials = credentials
             if credentials.access_token_expired:
                 self.refresh_token()
-        
+
 #         auth2token = gdata.gauth.OAuth2TokenFromCredentials(credentials)
         self.gdClient = gdata.photos.service.PhotosService(additional_headers={'Authorization' : 'Bearer %s' % self.credentials.access_token})
 #         self.gdClient = auth2token.authorize(gdClient)
@@ -120,54 +121,50 @@ class PicasaClient():
             if self.patternWrong.search(filename):
                 continue
             file = os.path.join(path, filename)
-            if os.path.isfile(file):
-                if self.pattern.search(file):
-                    files.append(filename)
-            elif os.path.isdir(file):
+            if os.path.isdir(file):
                 dirs.append(file)
+            elif not self.forceNotUploadFiles \
+                 and os.path.isfile(file) \
+                 and self.pattern.search(file):
+                    files.append(filename)
         files.sort()
         dirs.sort()
 
-        if len(files) > 0:
-            albumName=self.transformPath2Album(path)
+        albumName=self.transformPath2Album(path)
+        if (self.verbose): print("Album: %s " % (albumName))
+        album=self.getAlbum(albumName)
+        if album is None:
+            self.albunsToBeCreated.append(albumName)
+            # if (self.verbose): print("Creating Album: " + albumName)
+            # album=self.createAlbum(albumName, albumDate)
+        elif len(files) > 0:
             file = os.path.join(path, files[0])
             albumDate = self.getAlbumDateFromPhotos(file)
-            # if the album doesn't exist, create one
-            album = None
-            if (not self.forceCreateAlbum):
-                # print "Dont enforce create Album: "
-                album=self.getAlbum(albumName)
-            if album is None:
-                self.albunsToBeCreated.append(albumName) 
-                return
-                if (self.verbose): print("Creating Album: " + albumName)
-                album=self.createAlbum(albumName, albumDate)
-            else:
-                if (self.verbose): print("Album: %s " % (albumName))
-                album.timestamp = gdata.photos.Timestamp(text=albumDate)
+            album.timestamp = gdata.photos.Timestamp(text=albumDate)
                 # self.gdClient.Put(album, album.GetEditLink().href, converter=gdata.photos.AlbumEntryFromString)
             photoList = self.getPhotosFromAlbum(album)
-        noUploads=False
-        for filename in files:
-            file = os.path.join(path, filename)
-            # was the file already uploaded
-            md5=md5sum(file)
-            if (self.isPhotoInAlbum(md5, photoList)):
-                sys.stdout.write(".")
-                noUploads=True
-                continue
-            if noUploads: print(""); noUploads=False
-            if self.forceResizePhoto:
-                self.resizeAndUploadPhoto(file, filename, md5, album)
-            else:
-                self.uploadPhoto(file, filename, md5, album)
-            
-        if noUploads: print("")
+            noUploads=False
+            for filename in files:
+                file = os.path.join(path, filename)
+                # was the file already uploaded
+                md5=md5sum(file)
+                if (self.isPhotoInAlbum(md5, photoList)):
+                    sys.stdout.write(".")
+                    sys.stdout.flush()
+                    noUploads=True
+                    continue
+                if noUploads: print(""); noUploads=False
+                if self.forceResizePhoto:
+                    self.resizeAndUploadPhoto(file, filename, md5, album)
+                else:
+                    self.uploadPhoto(file, filename, md5, album)
+
+            if noUploads: print("")
         for dir in dirs:
             self.batchUploadPath(dir)
 
     def transformPath2Album(self, fullpath):
-        path = fullpath.strip()    
+        path = fullpath.strip()
         path = re.sub('/$', '', path)
         path = re.sub(self.rootpath, '', fullpath)
         path = re.sub('/[0-9]+_', '/', path)
@@ -177,16 +174,16 @@ class PicasaClient():
         path = re.sub('/', ' / ', path)
         return path
 
-    def transformFilename2PhotoTitle(self, filename):        
+    def transformFilename2PhotoTitle(self, filename):
         title = self.pattern.sub('', filename)
         title = re.sub('_', ' ', title)
         return title
-        
-    def transformPhotoTitle2Tags(self, photoTitle):        
+
+    def transformPhotoTitle2Tags(self, photoTitle):
         tags = re.sub(' +[0-9]+$', '', photoTitle)
         tags = re.sub(' ', ',', tags)
         return tags
-    
+
     def getAlbum(self, albumName):
         if self.albuns is None:
             self.albuns = self.getAlbums()
@@ -194,11 +191,11 @@ class PicasaClient():
             if album.title.text.strip() == albumName.strip():
                 return album
         return None
-        
+
     def getPhotosFromAlbum(self, album):
         photos = self.gdClient.GetFeed('/data/feed/api/user/%s/albumid/%s?kind=photo' % (self.userid, album.gphoto_id.text))
         return photos.entry
-     
+
     def createAlbum(self, albumName, albumDate):
         while True:
            try:
@@ -211,7 +208,7 @@ class PicasaClient():
                print("Album name %s" % albumName)
                # import traceback; traceback.print_exc()
                time.sleep(5)
-    
+
     def getAlbums(self):
         uri = '/data/feed/api/user/%s?kind=album' % (self.userid)
         albums=[]
@@ -271,7 +268,7 @@ class PicasaClient():
                self.gdClient.InsertPhoto('/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text), entry, file, content_type='image/jpeg')
                uploaded=True
             except gdata.photos.service.GooglePhotosException as e:
-                print("Upload failed. ", e) 
+                print("Upload failed. ", e)
                 self.connect()
                 time.sleep(2)
 
@@ -289,11 +286,11 @@ class PicasaClient():
                 newWidth = int(self.PICASA_MAX_FREE_DIMENSION * ratio)
                 newDimension = (newWidth, self.PICASA_MAX_FREE_DIMENSION)
 
-            # Create a temporary resized file 
+            # Create a temporary resized file
             if newDimension is not None:
                 print("Resizing %s (%s, %s) to (%s, %s)" % (filename, width, height, newDimension[0], newDimension[1]))
 
-                resizedImage = img.resize(newDimension) 
+                resizedImage = img.resize(newDimension)
                 tempFile, tempPath = mkstemp()
 
                 resizedImage.save(tempPath, "JPEG", exif=img.info.get('exif', ""))
@@ -350,7 +347,7 @@ def md5sum(fileName):
 
 
 def readFromConfigFile(client, args):
-    configParser = ConfigParser.ConfigParser()
+    configParser = configparser.ConfigParser()
     configParser.readfp(args.config)
     client.api_key = getParam(args.api_key, configParser, 'api_key')
     client.api_secret = getParam(args.api_secret, configParser, 'api_secret')
@@ -383,8 +380,13 @@ def main():
     parser.add_argument('-c', dest="forceCreateAlbum", help='Enforce create album', action='store_true')
     parser.add_argument('-r', dest="forceResizePhoto", help='Resize picture bigger than 4900px before upload (don\'t modify the original file)', action='store_true')
     parser.add_argument('--perms', dest='perm', action='store', help='Album perms', choices=['public', 'private', 'link'], default='private')
+    parser.add_argument('--not-upload-files', dest='forceNotUploadFiles', help='Should not upload files', action='store_true')
+
     args = parser.parse_args()
     client = PicasaClient()
+
+    client.forceNotUploadFiles = args.forceNotUploadFiles
+
     if args.config:
         readFromConfigFile(client, args)
     if args.perm==True:
@@ -395,7 +397,6 @@ def main():
         client.deleteAll()
     elif args.normalizeAlbum==True:
         client.normalizeAlbums()
-
 
 def trapCtrlC():
    def terminateSignalHandler(signal, frame):
